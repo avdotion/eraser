@@ -15,9 +15,10 @@
 import os
 import time
 import shutil
+from collections import namedtuple
 
-ARCHIVE_EXT = {"zip", "rar", "7z"}
-EXECUTABLE_EXT = {'exe', 'com', 'msi'}
+ARCHIVE_EXT = {".zip", ".rar", ".7z"}
+EXECUTABLE_EXT = {'.exe', '.com', '.msi'}
 
 
 class Eraser:
@@ -33,8 +34,16 @@ class Eraser:
                     total_size += os.path.getsize(fp)
             return total_size
         
+        try:
+            with open('.erase_tool', 'r') as fin:
+                exception_list = [i.rstrip() for i in fin.readlines()]
+        except FileNotFoundError:
+            exception_list = []
+        
         items = {'files': list(), 'folders': list(), 'unknowns': list()}
         for entry in os.listdir(path):
+            if entry in exception_list:
+                continue
             item = {'name': entry,
                     'linked': False,
                     'excepted': False,
@@ -62,10 +71,10 @@ class Eraser:
         for i in range(len(items['files'])):
             file = items['files'][i]
             if os.path.splitext(f'{path}/{file["name"]}')[1] in ARCHIVE_EXT:
-                for folder in items['folders']:
-                    if folder['name'] == file['name']:
+                for j in range(len(items['folders'])):
+                    if items['folders'][j]['name'] == os.path.splitext(file["name"])[0]:
                         items['files'][i]['linked'] = True
-                        items['folders'][i]['linked'] = True
+                        items['folders'][j]['linked'] = True
 
         return items
     
@@ -80,10 +89,9 @@ class Eraser:
         return items
     
     def remove(self, items, exception):
-        exp_name, exp_type = exception
-        for i in range(len(items[exp_type])):
-            if items[exp_type][i]['name'] == exp_name:
-                items[exp_type][i]['excepted'] = True
+        for i in range(len(items[exception.type])):
+            if items[exception.type][i]['name'] == exception.name:
+                items[exception.type][i]['excepted'] = True
         return items
 
     def erase(self, path, items):
@@ -94,6 +102,22 @@ class Eraser:
         for file in items['files']:
             if not file['excepted']:
                 os.remove(f'{path}/{file["name"]}')
+
+    def exclude(self, exception):
+        try:
+            with open('.erase_tool', 'r') as fin:
+                exception_list = [i.rstrip() for i in fin.readlines()]
+        except FileNotFoundError:
+            exception_list = []
+        finally:
+            if exception.type == 'folders':
+                exception_list.append(f'{exception.name}/')
+            elif exception.type == 'files':
+                exception_list.append(f'{exception.name}')
+
+            with open('.erase_tool', 'w') as fout:
+                for line in exception_list:
+                    fout.write(f'{line}\n')
 
 
 class EraserInterface:
@@ -150,23 +174,29 @@ class EraserInterface:
         CGREEN = '\033[32m'
         CEND = '\033[0m'
 
+        Entry = namedtuple('Entry', 'name type')
+
         for folder in items["folders"]:
             print(f'{count+1}. "{CYELLOW}{folder["name"]}/{CEND}" [{time_format(time.time() - folder["created"])}] ({size_format(folder["size"])})')
+            if folder['linked']:
+                print(f'  * unpacked archive')
             count += 1
-            may_be_excepted.append((folder["name"], 'folders', ))
+            
+            may_be_excepted.append(Entry(folder["name"], 'folders'))
         else:
             print()
     
         for file in items["files"]:
             print(f'{count+1}. "{CGREEN}{file["name"]}{CEND}" [{time_format(time.time() - file["created"])}] ({size_format(file["size"])})')
             count += 1
-            may_be_excepted.append((file["name"], 'files', ))
+            may_be_excepted.append(Entry(file["name"], 'files'))
         else:
             print()
 
         print('Type numbers of items you want to add to exceptions:')
         answer = input()
         for exception in answer.split():
+            self.tool.exclude(may_be_excepted[int(exception)-1])
             items = self.tool.remove(items, may_be_excepted[int(exception)-1])
         
         self.tool.erase(self.path, items)
