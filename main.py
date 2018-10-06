@@ -7,6 +7,11 @@
 # ** User should confirm all deletion
 # ** Files should be divined by file types with low and high priority
 
+## Smart features:
+# * Compare archives and folders
+# * Exceptions system (hidden file in current folder)
+
+
 import os
 import time
 import shutil
@@ -141,15 +146,19 @@ class EraserInterface:
         count = 0
         may_be_excepted = list()
         
+        CYELLOW = '\033[33m'
+        CGREEN = '\033[32m'
+        CEND = '\033[0m'
+
         for folder in items["folders"]:
-            print(f'{count+1}. "{folder["name"]}/" [{time_format(time.time() - folder["created"])}] ({size_format(folder["size"])})')
+            print(f'{count+1}. "{CYELLOW}{folder["name"]}/{CEND}" [{time_format(time.time() - folder["created"])}] ({size_format(folder["size"])})')
             count += 1
             may_be_excepted.append((folder["name"], 'folders', ))
         else:
             print()
     
         for file in items["files"]:
-            print(f'{count+1}. "{file["name"]}" [{time_format(time.time() - file["created"])}] ({size_format(file["size"])})')
+            print(f'{count+1}. "{CGREEN}{file["name"]}{CEND}" [{time_format(time.time() - file["created"])}] ({size_format(file["size"])})')
             count += 1
             may_be_excepted.append((file["name"], 'files', ))
         else:
