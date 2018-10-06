@@ -1,126 +1,124 @@
+# Eraser Tool
+## Features:
+# * Scan selected folder
+# * Sort a list of files and folders by date
+# * Make a decision:
+# ** App can be in exception list
+# ** User should confirm all deletion
+# ** Files should be divined by file types with low and high priority
+
 import os
 import time
 import shutil
-ARCHIVE_EXT = {".zip", ".rar", ".7z"}
-EXECUTABLE_EXT = {'.exe', '.com', '.msi'}
+
+ARCHIVE_EXT = {"zip", "rar", "7z"}
+EXECUTABLE_EXT = {'exe', 'com', 'msi'}
 
 
 class Eraser:
     def __init__(self):
-        pass
+        self.os = None
+    
+    def scan(self, path):
+        items = {'files': list(), 'folders': list(), 'unknowns': list(), 'linked': False}
+        for entry in os.listdir(path):
+            item = {'name': entry, 'created': os.path.getctime(path + entry)}
+            if os.path.isfile(entry):
+                item['type'] = 'file'
+                items['files'].append(item)
+            elif os.path.isdir(entry):
+                item['type'] = 'folder'
+                items['folders'].append(item)
+            else:
+                item['type'] = 'unknown'
+                items['unknowns'].append(item)
+            
+        return items
 
-    def scan_files(self, file_type):
-        found = list()
-        for node in os.listdir():
-            if os.path.isfile(node):
-                if file_type == "all":
-                    found.append(node)
-                else:
-                    if node[node.rindex('.'):] in file_type:
-                        found.append(node)
-        return found
+    def sort(self, items):
+        items['folders'].sort(lambda x: x['created'])
+        items['files'].sort(lambda x: x['created'])
+        return items
 
-    def scan_folders(self):
-        found = list()
-        for node in os.listdir():
-            if os.path.isdir(node):
-                found.append(node)
-        return found
+    def link(self, path, items):
+        for i in range(len(items['files'])):
+            file = items['files'][i]
+            if file.os.path.splitext(path + file['name'])[1] in ARCHIVE_EXT:
+                for folder in items['folders']:
+                    if folder['name'] == file['name']:
+                        items['files'][i]['linked'] = True
+                        items['folders'][i]['linked'] = True
 
-    def scan_unzipped(self, found):
-        unzipped = list()
-        for node in found:
-            if node[:node.rindex('.')] in os.listdir():
-                unzipped.append(node)
-        return unzipped
+        return items
+    
+    def resolve(self, exceptions, items):
+        for i in range(len(items['files'])):
+            if items['files'][i] in exceptions:
+                items['files'][i]['excepted'] = True
+        for i in range(len(items['folders'])):
+            if items['folders'][i] in exceptions:
+                items['folders'][i]['excepted'] = True
+        
+        return items
+    
+    def remove(self, items, exception):
+        exp_name, exp_type = exception
+        for i in range(len(items[exp_type])):
+            if items[exp_type][i]['name'] == exp_name:
+                items[exp_type][i]['name']['except'] = True
+        return items
 
-    def scan_time(self, found):
-        d = dict()
-        for node in found:
-            d[node] = int(os.path.getatime(node))
-        return sorted(d.items(), key=lambda x: x[1])
+    def erase(self, path, items):
+        for folder in items['folders']:
+            shutil.rmtree(path + folder['name'])
 
-    def delete(self, files, mode):
-        if mode == "file":
-            for file in files:
-                os.remove(file)
-        elif mode == "folder":
-            for folder in files:
-                shutil.rmtree(folder)
+        for file in items['files']:
+            os.remove(path + file['name'])
 
 
-class Interface:
+class EraserInterface:
     def __init__(self):
-        self.task = Eraser()
+        self.tool = Eraser()
+        self.path = None
+        self.exceptions = None
 
     def start(self):
-        print('Select mode of cleaning:')
-        print('1. Easy clean (automatic old files detection)')
-        print('2. Deep clean')
-        cmd = input('Type 1 or 2: ')
-        if cmd == '1':
-            print()
-            self.easy_clean()
-        elif cmd == '2':
-            print()
-            self.deep_clean()
+        # Launch scaning
+        print('Scaning launched...')
+        items = self.tool.scan(self.path)
+        print(f'Scaning finished ({len(items["folders"])} folders and {len(items["files"])} files)')
+        
+        # Sort items by date created
+        items = self.tool.sort(items)
 
-    def easy_clean(self):
-        print('Scanning for unzipped archives...')
-        found = self.task.scan_files(ARCHIVE_EXT)
-        print(len(found), 'archives was found.')
-        unzipped = self.task.scan_unzipped(found)
-        print(len(unzipped), 'of them are unzipped to the same directory.')
-        if len(unzipped):
-            cmd = input('Delete them? (y/n): ')
-            if cmd == 'y':
-                self.task.delete(unzipped, "file")
-                print(len(unzipped), 'archives was deleted')
-        print()
-        print('Looking for old executable files...')
-        found = self.task.scan_files(EXECUTABLE_EXT)
-        print(len(found), 'executables was found.')
-        found = self.task.scan_time(found)
-        self.selective_delete(found, "file")
-        print()
-        print('Looking for old folders...')
-        found = self.task.scan_folders()
-        print(len(found), 'folders was found.')
-        found = self.task.scan_time(found)
-        self.selective_delete(found, "folder")
-        print()
-        print("Use deep scan to delete more.")
+        # Link packed and unpacked archives
+        items = self.tool.link(self.path, items)
 
-    def deep_clean(self):
-        print("Looking for all files...")
-        self.selective_delete(self.task.scan_time(self.task.scan_files("all")), "files")
+        # Resolve issues if files in 'exceptions'
+        items = self.tool.resolve(self.exceptions, items)
 
-    def time_output(self, delta):
-        if delta / 60 / 60 / 24 // 365 > 0:
-            return 'more than ' + str(int(delta / 60 / 60 / 24 // 365)) + ' year'
-        elif delta / 60 / 60 // 24 > 0:
-            return 'more than ' + str(int(delta / 60 / 60 // 24)) + ' days'
-        elif delta / 60 // 60 > 0:
-            return 'more than ' + str(int(delta / 60 // 60)) + ' hours'
-        elif delta // 60 > 0:
-            return 'more than ' + str(int(delta // 60)) + ' munites'
-        else:
-            return str(int(delta)) + ' seconds'
-
-
-    def selective_delete(self, data, mode):
-        for archive in data:
-            print(archive[0], '- last accessed', self.time_output(time.time() - archive[1]))
-            ans = input('Are you sure to delete this file (y/n): ')
-            print()
-            if ans == 'y':
-                self.task.delete([archive[0]], mode)
-            elif ans == 'n':
-                pass
-            else:
-                return
+        # Do the first decision
+        print('This folder should be deleted:')
+        count = 0
+        may_be_excepted = list()
+        
+        for folder in items["folders"]:
+            print(f'{count}. "{folder["name"]}/" ({folder["size"]})')
+            count += 1
+            may_be_excepted.append((folder["name"], 'folder', ))
+        for file in items["files"]:
+            print(f'{count}. "{file["name"]}" ({file["size"]})')
+            count += 1
+            may_be_excepted.append((folder["name"], 'file', ))
+        
+        print('Type numbers of items you want to add to exceptions:')
+        answer = input()
+        for exception in answer.split():
+            items = self.tool.remove(items, may_be_excepted[exception])
+        
+        self.tool.erase(self.path, items)
 
 
 if __name__ == "__main__":
-    i = Interface()
-    i.start()
+    ui = EraserInterface()
+    ui.start()
