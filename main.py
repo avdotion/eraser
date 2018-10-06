@@ -63,8 +63,8 @@ class Eraser:
         return items
 
     def sort(self, items):
-        items['folders'].sort(key=lambda x: x['created'])
-        items['files'].sort(key=lambda x: x['created'])
+        items['folders'].sort(key=lambda x: x['created'] / x['size'])
+        items['files'].sort(key=lambda x: x['created'] / x['size'])
         return items
 
     def link(self, path, items):

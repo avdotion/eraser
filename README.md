@@ -1,19 +1,14 @@
-# Eraser
-_Magical tool for "Downloads" folder_  
-**Reason**: clear "Downloads" folder in MacOS, but not in Windows
+# Eraser Tool
+_I just want my "Downloads" folder to be cleaner. This magical script can help your PC to lose some weight._
+
+**Aim**: quick look at the Download folder, smart erasing it
 
 ## Features:
-### Easy clean
-* Scan for unzipped archives, deleting them
-* Scan for old executable files, deleting them
-* Scan for old folders
-### Deep clean
-* Scan for every file in Downloads (reversed sort by size)
+The tool scans whole your selected folder, tries to decide which files and folders should be deleted immediately. Besides, the tool emphasizes unextracted archives, links them to archives. You can easily create exception list, easy to remove it after.
 
 ## Getting started
-Just paste script to "Downloads" and run
+Launch cloned script in choosen folder: 
 
-## Plans
-- [ ] add langs
-- [ ] make cleaner smarter
-- [ ] command line parametrs
+```sh
+python path_to_script
+```
