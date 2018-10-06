@@ -20,14 +20,27 @@ class Eraser:
         self.os = None
     
     def scan(self, path):
-        items = {'files': list(), 'folders': list(), 'unknowns': list(), 'linked': False}
+        def get_folder_size(start_path='.'):
+            total_size = 0
+            for dirpath, dirnames, filenames in os.walk(start_path):
+                for f in filenames:
+                    fp = os.path.join(dirpath, f)
+                    total_size += os.path.getsize(fp)
+            return total_size
+        
+        items = {'files': list(), 'folders': list(), 'unknowns': list()}
         for entry in os.listdir(path):
-            item = {'name': entry, 'created': os.path.getctime(path + entry)}
+            item = {'name': entry,
+                    'linked': False,
+                    'excepted': False,
+                    'created': os.path.getctime(f'{path}/{entry}')}
             if os.path.isfile(entry):
                 item['type'] = 'file'
+                item['size'] = os.path.getsize(f'{path}/{entry}')
                 items['files'].append(item)
             elif os.path.isdir(entry):
                 item['type'] = 'folder'
+                item['size'] = get_folder_size(f'{path}/{entry}')
                 items['folders'].append(item)
             else:
                 item['type'] = 'unknown'
@@ -36,14 +49,14 @@ class Eraser:
         return items
 
     def sort(self, items):
-        items['folders'].sort(lambda x: x['created'])
-        items['files'].sort(lambda x: x['created'])
+        items['folders'].sort(key=lambda x: x['created'])
+        items['files'].sort(key=lambda x: x['created'])
         return items
 
     def link(self, path, items):
         for i in range(len(items['files'])):
             file = items['files'][i]
-            if file.os.path.splitext(path + file['name'])[1] in ARCHIVE_EXT:
+            if os.path.splitext(f'{path}/{file["name"]}')[1] in ARCHIVE_EXT:
                 for folder in items['folders']:
                     if folder['name'] == file['name']:
                         items['files'][i]['linked'] = True
@@ -65,24 +78,50 @@ class Eraser:
         exp_name, exp_type = exception
         for i in range(len(items[exp_type])):
             if items[exp_type][i]['name'] == exp_name:
-                items[exp_type][i]['name']['except'] = True
+                items[exp_type][i]['excepted'] = True
         return items
 
     def erase(self, path, items):
         for folder in items['folders']:
-            shutil.rmtree(path + folder['name'])
+            if not folder['excepted']:
+                shutil.rmtree(f'{path}/{folder["name"]}')
 
         for file in items['files']:
-            os.remove(path + file['name'])
+            if not file['excepted']:
+                os.remove(f'{path}/{file["name"]}')
 
 
 class EraserInterface:
-    def __init__(self):
+    def __init__(self, path):
         self.tool = Eraser()
-        self.path = None
-        self.exceptions = None
+        self.path = path
+        self.exceptions = []
 
     def start(self):
+        def size_format(size):
+            if 0 <= size < 2 ** 10:
+                return f'{size}B'
+            elif 2 ** 10 <= size < 2 ** 20:
+                return f'{size // 2 ** 10}KB'
+            elif 2 ** 20 <= size < 2 ** 30:
+                return f'{size // 2 ** 20}MB'
+            elif 2 ** 30 <= size < 2 ** 40:
+                return f'{size // 2 ** 30}GB'
+            else:
+                return f'{size}B'
+
+        def time_format(delta):
+            if delta / 60 / 60 / 24 // 365 > 0:
+                return f'more than {(int(delta / 60 / 60 / 24 // 365))} year'
+            elif delta / 60 / 60 // 24 > 0:
+                return f'more than {(int(delta / 60 / 60 // 24))} days'
+            elif delta / 60 // 60 > 0:
+                return f'more than {(int(delta / 60 // 60))} hours'
+            elif delta // 60 > 0:
+                return f'more than {(int(delta // 60))} munites'
+            else:
+                return f'{(int(delta))} seconds'
+        
         # Launch scaning
         print('Scaning launched...')
         items = self.tool.scan(self.path)
@@ -98,27 +137,32 @@ class EraserInterface:
         items = self.tool.resolve(self.exceptions, items)
 
         # Do the first decision
-        print('This folder should be deleted:')
+        print('This folder can be deleted:')
         count = 0
         may_be_excepted = list()
         
         for folder in items["folders"]:
-            print(f'{count}. "{folder["name"]}/" ({folder["size"]})')
+            print(f'{count+1}. "{folder["name"]}/" [{time_format(time.time() - folder["created"])}] ({size_format(folder["size"])})')
             count += 1
-            may_be_excepted.append((folder["name"], 'folder', ))
+            may_be_excepted.append((folder["name"], 'folders', ))
+        else:
+            print()
+    
         for file in items["files"]:
-            print(f'{count}. "{file["name"]}" ({file["size"]})')
+            print(f'{count+1}. "{file["name"]}" [{time_format(time.time() - file["created"])}] ({size_format(file["size"])})')
             count += 1
-            may_be_excepted.append((folder["name"], 'file', ))
-        
+            may_be_excepted.append((file["name"], 'files', ))
+        else:
+            print()
+
         print('Type numbers of items you want to add to exceptions:')
         answer = input()
         for exception in answer.split():
-            items = self.tool.remove(items, may_be_excepted[exception])
+            items = self.tool.remove(items, may_be_excepted[int(exception)-1])
         
         self.tool.erase(self.path, items)
 
 
 if __name__ == "__main__":
-    ui = EraserInterface()
+    ui = EraserInterface(os.getcwd())
     ui.start()
