@@ -63,8 +63,8 @@ class Eraser:
         return items
 
     def sort(self, items):
-        items['folders'].sort(key=lambda x: x['created'] / x['size'])
-        items['files'].sort(key=lambda x: x['created'] / x['size'])
+        items['folders'].sort(key=lambda x: x['size'] and x['created'] / x['size'])
+        items['files'].sort(key=lambda x: x['size'] and x['created'] / x['size'])
         return items
 
     def link(self, path, items):
@@ -166,18 +166,15 @@ class EraserInterface:
         items = self.tool.resolve(self.exceptions, items)
 
         # Do the first decision
-        print('This folder can be deleted:')
+        print('This folders can be deleted:')
         count = 0
         may_be_excepted = list()
-        
-        CYELLOW = '\033[33m'
-        CGREEN = '\033[32m'
-        CEND = '\033[0m'
+    
 
         Entry = namedtuple('Entry', 'name type')
 
         for folder in items["folders"]:
-            print(f'{count+1}. "{CYELLOW}{folder["name"]}/{CEND}" [{time_format(time.time() - folder["created"])}] ({size_format(folder["size"])})')
+            print(f'{count+1}. "{folder["name"]}/" [{time_format(time.time() - folder["created"])}] ({size_format(folder["size"])})')
             if folder['linked']:
                 print(f'  * unpacked archive')
             count += 1
@@ -187,7 +184,7 @@ class EraserInterface:
             print()
     
         for file in items["files"]:
-            print(f'{count+1}. "{CGREEN}{file["name"]}{CEND}" [{time_format(time.time() - file["created"])}] ({size_format(file["size"])})')
+            print(f'{count+1}. "{file["name"]}" [{time_format(time.time() - file["created"])}] ({size_format(file["size"])})')
             count += 1
             may_be_excepted.append(Entry(file["name"], 'files'))
         else:
